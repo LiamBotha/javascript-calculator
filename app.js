@@ -1,24 +1,23 @@
-let calcValue = "0";
-let currOp = '';
+import { Calculate, DoesEndWithMathSymbol } from "./calculations.js";
+
+let currentCalcString = "0";
+let currentOp = '';
+
 let bHasDecimal = false;
-const ops = new RegExp("^.*[+-X/]$");
+let bHasValue = false;
+let bCompletedCalc = false;
+
+// references to elements on the DOM
 const display = document.getElementById("display");
+const buttonArr = [...document.getElementsByClassName("btn")];
 
-display.firstChild.textContent = calcValue;
-
-let btns = [...document.getElementsByClassName("btn")];
-
-const add = (a,b) => { return a + b };
-const subtract = (a,b) => { return a - b };
-const multiply = (a,b) => { return a * b };
-const divide = (a,b) => { return a / b};
-
-btns.forEach(btn => {
+// bindings
+buttonArr.forEach(btn => {
     btn.addEventListener('click', HandleButtonPress);
 });
-
 window.addEventListener("keydown", HandleKeyPress);
 
+// handle keyboard input
 function HandleKeyPress(event)
 {
     switch(event.key) {
@@ -36,17 +35,18 @@ function HandleKeyPress(event)
             HandleNum(event.key);
             break;
         }
+        case "Enter":
         case "=": {
             HandleOp("=");
             break;
         }
-        case "Backspace": 
+        case "Backspace":
         {
             HandleOp("DEL");
             break;
         }
         case "Escape": {
-            HandleOp("AC");
+            HandleOp("C");
             break;
         }
         case "+": {
@@ -59,110 +59,167 @@ function HandleKeyPress(event)
         }
         case "x":
         case "*": {
-            HandleOp("X");
+            HandleOp('*');
             break;
         }
         case "/": {
             HandleOp("/");
             break;
         }
+        default: return;
     }
 
-    display.firstChild.textContent = calcValue.toString();
+    display.firstChild.textContent = currentCalcString.toString();
 }
 
-function HandleButtonPress(event) 
+function HandleButtonPress(event)
 {
-    const value = event.target.textContent;
+    // get the value of the button pressed
+    const value = event.target.dataset.btn;
 
     if(event.target.classList.contains("op"))
-    {
         HandleOp(value);
-        console.dir("op");
-    }
     else if(event.target.classList.contains("num"))
-    {
         HandleNum(value);
-        console.dir("num");
-    }
+    else // edge case break
+        return;
 
-    display.firstChild.textContent = calcValue.toString();
+    // set the display to the modified calcValue
+    display.firstChild.textContent = currentCalcString.toString();
 }
 
+// Handle adding basic numbers
 function HandleNum(value)
 {
-    console.dir(value);
-
-    if(value == ".")
+    if(value === ".")
     {
-        if(bHasDecimal == true || /[^0-9]$/.test(calcValue))
+        // check if current value already has decimal
+        if(bHasDecimal === true || /[^0-9]$/.test(currentCalcString))
             return;
 
-        bHasDecimal = true; 
+        bHasDecimal = true;
+        bCompletedCalc = false;
     }
 
-    if(calcValue == '0')
-        calcValue = value;
+    // if value is 0, replace as first number
+    if(currentCalcString === '0' || bCompletedCalc === true)
+        currentCalcString = value;
     else
-         calcValue += value;
+        currentCalcString += value;
+
+
+    bCompletedCalc = false;
 }
 
+// handle special keys such as Clear, Delete, Equals, and Math Symbols
 function HandleOp(value)
 {
+    bCompletedCalc = false;
+
     switch(value){
-        case "AC": {
-            calcValue = "0";
-            currOp = "";
+        case "C":
+        {
+            // reset calculator string to 0
+            currentCalcString = "0";
+            currentOp = "";
             bHasDecimal = false;
 
             break;
         }
-        case "DEL":{
+        case "DEL":
+        {
             HandleDelete();
             break;
         }
         case "=": {
-            let [a, b] = calcValue.split(currOp);
-            let newVal = currOp ? operator(currOp, a, b) : null;
-            console.dir(newVal);
-            calcValue = newVal != null ? newVal.toString() : calcValue;
-            currOp = "";
-            bHasValue = calcValue.includes(".");
-
+            currentCalcString = CalculateEqualsResult(currentCalcString);
+            currentOp = "";
+            bHasValue = currentCalcString.includes(".");
+            bCompletedCalc = true;
             break;
         }
-        default: {    
+        case "Negate":
+        {
+            if(currentOp === "")
+            {
+                currentCalcString = NegateNumber(parseFloat(currentCalcString)).toString()
+            }
+            else
+            {
+                if(DoesEndWithMathSymbol(currentCalcString))
+                    return;
+
+                const [a, b] = currentCalcString.split(currentOp);
+                const negatedB = NegateNumber(parseFloat(b))
+
+                // make sure to pass a string so it doesn't break
+                currentCalcString = a + "" + currentOp + "" + negatedB;
+            }
+            break;
+        } // not one of the special cases
+        default: {
             HandleMathSymbol(value);
             break;
         }
     }
+
+    return false;
 }
 
-function HandleMathSymbol(value) 
+function CalculateEqualsResult(calcString)
 {
-    if (currOp != "") {
-        if (calcValue.endsWith('+') || calcValue.endsWith('-') || calcValue.endsWith('X') || calcValue.endsWith('/')) {
-            calcValue = calcValue.substring(0, calcValue.length - 1);
-            calcValue += value;
-            currOp = value;
+    // split string by math symbol
+    const [a, b] = calcString.split(currentOp);
+    // calculate result of operation a * b, a - b, etc...
+    const result = currentOp ? Calculate(currentOp, a, b) : null;
+    // if result fails return the unmodified string
+    return result != null ? result.toString() : calcString;
+}
 
+function NegateNumber(numberToNegate)
+{
+    return numberToNegate * -1;
+}
+
+function HandleMathSymbol(value)
+{
+    // append zero to float if decimal is last character
+    if(bHasDecimal === true && currentCalcString.at(-1) === ".")
+        currentCalcString += "0";
+
+    // if currentOp already exists replace with this Op
+    if (currentOp !== "") {
+        if (DoesEndWithMathSymbol(currentCalcString))
+        {
+            // remove last char from calculator string & add new one
+            currentCalcString = currentCalcString.substring(0, currentCalcString.length - 1);
+            currentCalcString += value;
+            currentOp = value;
+
+            // in case last key was the decimal
             bHasDecimal = false;
         }
-        else {
-            let [a, b] = calcValue.split(currOp);
-            let newVal = currOp ? operator(currOp, a, b) : null;
-            console.dir(newVal);
-            calcValue = newVal != null ? newVal.toString() : calcValue;
+        else
+        {
+            // calc previous operations so that there is only one at a time
+            currentCalcString = CalculateEqualsResult(currentCalcString);
+            currentOp = "";
+            bHasValue = currentCalcString.includes(".");
 
-            currOp = value;
-            calcValue += value;
+            // break string into operation, a and b
+            let [a, b] = currentCalcString.split(currentOp);
+            let result = currentOp ? Calculate(currentOp, a, b) : null;
+
+            currentCalcString = (result != null && isNaN(result)) ? result.toString() : currentCalcString;
+            currentOp = value;
+            currentCalcString += value;
 
             bHasDecimal = false;
         }
     }
     else {
-        currOp = value;
-        calcValue += value;
+        currentOp = value;
+        currentCalcString += value;
 
         bHasDecimal = false;
     }
@@ -170,48 +227,27 @@ function HandleMathSymbol(value)
 
 function HandleDelete()
 {
-    if (calcValue.endsWith('+') || calcValue.endsWith('-') || calcValue.endsWith('X') || calcValue.endsWith('/')) {
-        currOp = "";
-
-        bHasValue = calcValue.includes(".");
-    }
-    else if (calcValue.endsWith(".")) {
+    // reset calculator to default if only one character to delete
+    if (currentCalcString.length === 1)
+    {
+        currentCalcString = '0';
+        bHasValue = false;
         bHasDecimal = false;
     }
-
-    if (calcValue.length == 1)
-        calcValue = 0;
     else
-        calcValue = calcValue.substring(0, calcValue.length - 1);
-}
-
-function operator(op, a, b)
-{
-    a = parseFloat(a);
-    b = parseFloat(b);
-
-    let result = null;
-
-    switch(op)
     {
-        case '+': {
-            result = add(a, b);
-            break;
-        }
-        case '-': {
-            result = subtract(a, b);
-            break;
-        }
-        case 'X': {
-            result = multiply(a, b);
-            break;
-        }
-        case '/': {
-            result = divide(a, b);
-            break;
-        }
+        // remove last character
+        currentCalcString = currentCalcString.substring(0, currentCalcString.length - 1);
     }
 
-    console.dir("end of switch: " + result);
-    return (Math.round((result + Number.EPSILON) * 100) / 100).toString();
+    console.log(currentCalcString.at(-1));
+
+    if (DoesEndWithMathSymbol(currentCalcString)) {
+        currentOp = currentCalcString.at(-1);
+        bHasValue = currentCalcString.includes(".");
+        bHasDecimal = false;
+    }
+    else if (currentCalcString.endsWith(".")) {
+        bHasDecimal = true;
+    }
 }

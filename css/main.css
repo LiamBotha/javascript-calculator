@@ -59,15 +59,16 @@ body {
     user-select: none;
 }
 
-.btn-2 {
+.btn-2w {
     width: calc((var(--btn-size) + var(--btn-margin)) * 2);
 }
 
+.btn-2h {
+    height: calc((var(--btn-size) + var(--btn-margin)) * 2);
+}
+
 .btn-equals {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    padding: calc(((var(--btn-size) + var(--btn-margin)) * 2 - 19px) / 2) 0;
+    /*padding: calc(((var(--btn-size) + var(--btn-margin)) * 2 - 19px) / 2) 0;*/
 }
 
 .btn-red {
